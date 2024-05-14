@@ -404,8 +404,6 @@ workflows:
             parameters:
               ansible_cisco_dnac_version:
                 - "6.9.0"
-              run-all: 
-                - true
       - hold:
           type: approval
       
