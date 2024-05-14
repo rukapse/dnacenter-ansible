@@ -309,6 +309,10 @@ jobs:
                   python ${HOME}/static/pnp_script.py
 
   main-pr:
+    parameters: 
+      ansible_cisco_dnac_version:
+        type: string
+        default: "6.9.0"
     machine: true
     resource_class: rukapse/dnacenter-ansible
     working_directory: ~/repo 
@@ -317,6 +321,10 @@ jobs:
           gh pr create --base main --head << pipeline.git.branch >> --title "Release v<< parameters.ansible_cisco_dnac_version >>" --body "Release v<< parameters.ansible_cisco_dnac_version >>"
 
   release-job:
+    parameters: 
+      ansible_cisco_dnac_version:
+        type: string
+        default: "6.9.0"
     machine: true
     resource_class: rukapse/dnacenter-ansible
     working_directory: ~/repo 
@@ -417,6 +425,7 @@ workflows:
         pattern: "main"
         value: << pipeline.git.branch >>
     jobs:   
+      - pre
       - build:
           matrix:
             parameters:
