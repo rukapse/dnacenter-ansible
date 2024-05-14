@@ -6,6 +6,27 @@ orbs:
   path-filtering: circleci/path-filtering@0.1.6
 
 parameters:
+  GHA_Event:
+    type: string
+    default: ""
+  GHA_Actor:
+    type: string
+    default: ""
+  GHA_Action:
+    type: string
+    default: ""
+  GHA_Meta:
+    type: string
+    default: ""
+  run-tests:
+    type: boolean
+    default: true
+  run-release-prep:
+    type: boolean
+    default: false
+  run-release:
+    type: boolean
+    default: false
   run-setup:
     type: boolean
     default: true
@@ -340,10 +361,12 @@ jobs:
           ansible-galaxy collection install --force ${HOME}/.cache/v<< parameters.ansible_cisco_dnac_version >>/collection-tarballs/*.tar.gz
           ansible-galaxy collection publish ${HOME}/.cache/v<< parameters.ansible_cisco_dnac_version >>/collection-tarballs/*.tar.gz --api-key=$GALAXYKEY
 
-workflows:  
-  
-  pre-testing:
-    when: << pipeline.parameters.run-setup >>
+workflows:
+  develop:
+    when:
+      or:
+        - equal: [ true, << pipeline.parameters.run-tests >> ]
+        - equal: [ run-tests, << pipeline.GHA_Meta >> ]
     jobs:
       - pre
 
@@ -381,11 +404,10 @@ workflows:
             tests/integration/ccc_inventory_management/.* run-inventory true
             tests/integration/ccc_swim_management/.* run-swim true
             tests/integration/ccc_pnp_management/.* run-pnp true
-
-  integration-testing:
-    when: << pipeline.parameters.run-any >> 
-    jobs:          
-      - addrole
+     
+      - addrole:
+          requires: 
+            - path-filtering/filter
 
       - sanity-tests:
           requires:
@@ -399,19 +421,10 @@ workflows:
       #       - sanity-tests
   release-candidate:
     when:
-      matches:
-        pattern: ".*-rc$"
-        value: << pipeline.git.branch >>
+      or:
+        - equal: [ true, << pipeline.parameters.run-release-prep >> ]
+        - equal: [ run-release-prep, << pipeline.GHA_Meta >> ]
     jobs:          
-      - addrole
-
-      - sanity-tests:
-          requires:
-            - addrole
-          matrix:
-            parameters:
-              ansible_cisco_dnac_version:
-                - "6.9.0"
       - hold:
           type: approval
       
@@ -421,9 +434,9 @@ workflows:
 
   release:
     when:
-      matches:
-        pattern: "main"
-        value: << pipeline.git.branch >>
+      or:
+        - equal: [ true, << pipeline.parameters.run-release >> ]
+        - equal: [ run-release-prep, << pipeline.GHA_Meta >> ]
     jobs:   
       - pre
       - build:
