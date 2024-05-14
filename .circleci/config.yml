@@ -20,7 +20,7 @@ parameters:
     default: ""
   run-tests:
     type: boolean
-    default: true
+    default: false
   run-release-prep:
     type: boolean
     default: false
