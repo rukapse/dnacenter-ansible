@@ -13,5 +13,6 @@ jobs:
         uses: CircleCI-Public/trigger-circleci-pipeline-action@v1.0.5
         with:
           GHA_Meta: "run-release-prep"
+          target-slug: "gh/cci-8r5r4/dnacenter-ansible"
         env:
           CCI_TOKEN: ${{ secrets.CCI_TOKEN }}

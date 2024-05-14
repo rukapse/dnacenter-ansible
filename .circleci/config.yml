@@ -366,7 +366,7 @@ workflows:
     when:
       or:
         - equal: [ true, << pipeline.parameters.run-tests >> ]
-        - equal: [ run-tests, << pipeline.GHA_Meta >> ]
+        - equal: [ run-tests, << pipeline.parameters.GHA_Meta >> ]
     jobs:
       - pre
 
@@ -423,7 +423,7 @@ workflows:
     when:
       or:
         - equal: [ true, << pipeline.parameters.run-release-prep >> ]
-        - equal: [ run-release-prep, << pipeline.GHA_Meta >> ]
+        - equal: [ run-release-prep, << pipeline.parameters.GHA_Meta >> ]
     jobs:          
       - hold:
           type: approval
@@ -436,7 +436,7 @@ workflows:
     when:
       or:
         - equal: [ true, << pipeline.parameters.run-release >> ]
-        - equal: [ run-release-prep, << pipeline.GHA_Meta >> ]
+        - equal: [ run-release-prep, << pipeline.parameters.GHA_Meta >> ]
     jobs:   
       - pre
       - build:
