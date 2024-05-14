@@ -123,13 +123,14 @@ jobs:
           command: |
             set -x 
             # Activate Virtual Environment
-            pyenv local ansible
             export PYENV_ROOT="$HOME/.pyenv"
             export PATH="$PYENV_ROOT/bin:$PATH"
             export PATH="$PYENV_ROOT/shims/python3:$PATH"
             export PATH="$PYENV_ROOT/shims/python:$PATH"
+            export PATH="$PYENV_ROOT/shims/pip:$PATH"
             export PYTHONPATH="$PYENV_ROOT/shims/python3:$PYTHONPATH"
             export PYTHONPATH="$PYENV_ROOT/shims/python:$PYTHONPATH"
+            pyenv local ansible
 
             # Install ansible, dnacentersdk
             pip install --upgrade pip
@@ -244,13 +245,14 @@ jobs:
           command: |
             set -x 
             # Activate Virtual Environment
-            pyenv local ansible
             export PYENV_ROOT="$HOME/.pyenv"
             export PATH="$PYENV_ROOT/bin:$PATH"
             export PATH="$PYENV_ROOT/shims/python3:$PATH"
             export PATH="$PYENV_ROOT/shims/python:$PATH"
+            export PATH="$PYENV_ROOT/shims/pip:$PATH"
             export PYTHONPATH="$PYENV_ROOT/shims/python3:$PYTHONPATH"
             export PYTHONPATH="$PYENV_ROOT/shims/python:$PYTHONPATH"
+            pyenv local ansible
 
             export PATH="$HOME/.ansible/collections/:$PATH"
             export PYTHONPATH="$HOME/.ansible/collections/:$PYTHONPATH"
@@ -305,6 +307,30 @@ jobs:
             - run: 
                 command: |
                   python ${HOME}/static/pnp_script.py
+
+  main-pr:
+    machine: true
+    resource_class: rukapse/dnacenter-ansible
+    working_directory: ~/repo 
+    steps:
+      - run:
+          gh pr create --base main --head << pipeline.git.branch >> --title "Release v<< parameters.ansible_cisco_dnac_version >>" --body "Release v<< parameters.ansible_cisco_dnac_version >>"
+
+  release-job:
+    machine: true
+    resource_class: rukapse/dnacenter-ansible
+    working_directory: ~/repo 
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints:
+            - "KEY_FINGERPRINT"
+      - run:
+          git tag -a v<< parameters.ansible_cisco_dnac_version >> -m "Ansible DNACCollection Version v<< parameters.ansible_cisco_dnac_version >>"
+          gh release create "v<< parameters.ansible_cisco_dnac_version >>" --title "DNAC Collection Version v<< parameters.ansible_cisco_dnac_version >>" --latest
+          ansible-galaxy collection build
+          ansible-galaxy collection install --force ${HOME}/.cache/v<< parameters.ansible_cisco_dnac_version >>/collection-tarballs/*.tar.gz
+          ansible-galaxy collection publish ${HOME}/.cache/v<< parameters.ansible_cisco_dnac_version >>/collection-tarballs/*.tar.gz --api-key=$GALAXYKEY
 
 workflows:  
   
@@ -363,3 +389,43 @@ workflows:
       # - post_pnp_testing:
       #     requires:
       #       - sanity-tests
+  release-candidate:
+    when:
+      matches:
+        pattern: ".*-rc$"
+        value: << pipeline.git.branch >>
+    jobs:          
+      - addrole
+
+      - sanity-tests:
+          requires:
+            - addrole
+          matrix:
+            parameters:
+              ansible_cisco_dnac_version:
+                - "6.9.0"
+              run-all: true
+      - hold:
+          type: approval
+      
+      - main-pr:
+          requires:
+            - hold
+
+  release:
+    when:
+      matches:
+        pattern: "main"
+        value: << pipeline.git.branch >>
+    jobs:   
+      - build:
+          matrix:
+            parameters:
+              ansible_cisco_dnac_version:
+                - "6.9.0"
+          requires:
+            - pre
+      - release-job:
+          requires:
+              - build
+
