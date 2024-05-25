@@ -79,49 +79,49 @@
 #     Create Range IP Address Discovery     #
 #############################################
 
-  # - name: Discover an IP Address Range
-  #   cisco.dnac.discovery_workflow_manager:
-  #     <<: *dnac_login
-  #     state: merged
-  #     config:
-  #       - "{{ item }}"
-  #   loop: "{{ vars_map.ip_range }}"
-  #   register: result_ip_range_discovery
-
-  # - name: Debug item
-  #   debug:
-  #     var: result_ip_range_discovery
-
-  # - name: Check IP address range discovery creation
-  #   assert:
-  #     that:
-  #       - result_ip_range_discovery.changed == true
-  #       - "'Discovery Created Successfully' in result_ip_range_discovery.results | map(attribute='msg') | list"
-  #   when: result_ip_range_discovery is defined
-
-#############################################
-#  Create Multi Range IP Address Discovery  #
-#############################################
-
-  - name: Discover Multi IP Address Ranges
+  - name: Discover an IP Address Range
     cisco.dnac.discovery_workflow_manager:
       <<: *dnac_login
       state: merged
       config:
         - "{{ item }}"
-    loop: "{{ vars_map.multi_range }}"
-    register: result_multi_range_discovery
+    loop: "{{ vars_map.ip_range }}"
+    register: result_ip_range_discovery
+
+  # - name: Debug item
+  #   debug:
+  #     var: result_ip_range_discovery
+
+  - name: Check IP address range discovery creation
+    assert:
+      that:
+        - result_ip_range_discovery.changed == true
+        - "'Discovery Created Successfully' in result_ip_range_discovery.results | map(attribute='msg') | list"
+    when: result_ip_range_discovery is defined
+
+#############################################
+#  Create Multi Range IP Address Discovery  #
+#############################################
+
+  # - name: Discover Multi IP Address Ranges
+  #   cisco.dnac.discovery_workflow_manager:
+  #     <<: *dnac_login
+  #     state: merged
+  #     config:
+  #       - "{{ item }}"
+  #   loop: "{{ vars_map.multi_range }}"
+  #   register: result_multi_range_discovery
 
   # - name: Debug item
   #   debug:
   #     var: result_multi_range_discovery
 
-  - name: Check multi range IP address discovery creation
-    assert:
-      that:
-        - result_multi_range_discovery.changed == true
-        - "'Discovery Created Successfully' in result_multi_range_discovery.results | map(attribute='msg') | list"
-    when: result_multi_range_discovery is defined
+  # - name: Check multi range IP address discovery creation
+  #   assert:
+  #     that:
+  #       - result_multi_range_discovery.changed == true
+  #       - "'Discovery Created Successfully' in result_multi_range_discovery.results | map(attribute='msg') | list"
+  #   when: result_multi_range_discovery is defined
 
 #############################################
 #        Create  Discovery using CDP        #

@@ -89,7 +89,7 @@
     assert:
       that:
         - item.changed == true
-        - "'Updated Successfully' in item.msg"
+        - "'updated successfully' in item.msg"
     loop: "{{ result_update_site.results }}"
     when: result_update_site is defined
 
