@@ -24,6 +24,18 @@
   #     msg: "{{ vars_map. }}"
 
 #############################################
+#                Clean Up                   #
+#############################################
+
+  - name: Delete device
+    cisco.dnac.inventory_workflow_manager:
+      <<: *dnac_login
+      state: deleted
+      config:
+        - "{{ item }}"
+    loop: "{{ vars_map.delete_devices }}"
+
+#############################################
 #                Add Devices                #
 #############################################
 
@@ -41,13 +53,13 @@
   #     var: item
   #   loop: "{{ result_add_device.results }}"
 
-  # - name: Assert device addition success
-  #   assert:
-  #     that:
-  #       - item.changed == true
-  #       - "'added to Cisco Catalyst Center' in item.msg"
-  #   loop: "{{ result_add_device.results }}"
-  #   when: result_add_device is defined
+  - name: Assert device addition success
+    assert:
+      that:
+        - item.changed == true
+        - "'added to Cisco Catalyst Center' in item.msg"
+    loop: "{{ result_add_device.results }}"
+    when: result_add_device is defined
 
 #############################################
 #           Run Full Compliance             #
@@ -74,16 +86,3 @@
     debug:
       var: item
     loop: "{{ run_complaince.results }}"
-
-# #############################################
-# #       Sync Device Config on IP List       #
-# #############################################
-
-#   - name: Sync Device Config on IP List
-#     cisco.dnac.network_compliance_workflow_manager:
-#       <<: *dnac_login
-#       dnac_log_append: False
-#       config:
-#         - #ip_address_list: ['204.1.2.5']
-#           ip_address_list: ['204.1.2.2', '204.1.2.5', '204.1.2.4']
-#           sync_device_config: True

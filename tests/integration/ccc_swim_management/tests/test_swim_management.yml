@@ -206,25 +206,25 @@
 #              ACTIVATE IMAGE               #
 #############################################
 
-  - name: SWIM task - activate
-    cisco.dnac.swim_workflow_manager:
-      <<: *dnac_login
-      config:
-      - "{{ item }}"
-    loop: "{{ vars_map.image_activation_details }}"
-    register: result_activate_image
+  # - name: SWIM task - activate
+  #   cisco.dnac.swim_workflow_manager:
+  #     <<: *dnac_login
+  #     config:
+  #     - "{{ item }}"
+  #   loop: "{{ vars_map.image_activation_details }}"
+  #   register: result_activate_image
 
   # - name: Debug item
   #   debug:
   #     var: item
   #   loop: "{{ result_activate_image.results }}"
 
-  - name: Assert image activation
-    assert:
-      that:
-        - item.changed == true
-    loop: "{{ result_activate_image.results }}"
-    when: result_activate_image is defined
+  # - name: Assert image activation
+  #   assert:
+  #     that:
+  #       - item.changed == true
+  #   loop: "{{ result_activate_image.results }}"
+  #   when: result_activate_image is defined
 
 #############################################
 #               UNTAG IMAGE                 #

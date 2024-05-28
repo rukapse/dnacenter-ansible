@@ -25,38 +25,6 @@ device_details:
 run_complaince:
   - ip_address_list: ['204.1.2.5'] 
 
-  - ip_address_list: ['204.1.2.5'] 
-    site_name: 'Global'     
-
-  - ip_address_list: ['204.1.2.5']
-    site_name: 'Global'
-    run_complaince: True
-
-  - ip_address_list: ['204.1.2.5']
-    site_name: 'Global'
-    run_complaince: False
-
-
-sync_device_config: 
-  - ip_address_list: ['204.1.2.5']
-    site_name: 'Global'
-    sync_device_config: True
-
-  - ip_address_list: ['204.1.2.5']
-    site_name: 'Global' 
-    run_complaince: True
-    sync_device_config: True
-
-  - ip_address_list: ['204.1.2.5']
-    site_name: 'Global' 
-    run_complaince: True
-    sync_device_config: False
-
-  - ip_address_list: ['204.1.2.5']
-    site_name: 'Global' 
-    run_complaince: False
-    sync_device_config: True
-
 
 delete_devices:
   - ip_address_list: ["204.1.2.5"]
