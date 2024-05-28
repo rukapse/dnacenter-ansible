@@ -3,7 +3,7 @@ version: 2.1
 setup: << pipeline.parameters.run-setup >>
 
 orbs:
-  path-filtering: circleci/path-filtering@0.1.6
+  path-filtering: circleci/path-filtering@0.1.7
 
 parameters:
   run-setup:
@@ -42,8 +42,10 @@ jobs:
         type: string
         default: "6.9.0"
 
-    machine: true
-    resource_class: rukapse/dnacenter-ansible
+    #machine: true
+    docker:
+      - image: python:3.8.10
+    resource_class: rukapse/dnacenter-ansible-minikube
 
     environment:
       CIRCLE_PROJECT_REPONAME: << pipeline.trigger_parameters.github_app.repo_name >>
@@ -57,13 +59,6 @@ jobs:
             echo "REPO_URL: $REPO_URL"
             echo "CIRCLE_PROJECT_REPONAME: $CIRCLE_PROJECT_REPONAME"
             echo "CIRCLE_PROJECT_BRANCHNAME: $CIRCLE_PROJECT_BRANCHNAME"
-            env
-      - run:
-          name: Remove existing directory and collection tarball
-          command: |
-            set -x 
-            rm -rf ${HOME}/repo/$CIRCLE_PROJECT_REPONAME
-            rm -rf ${HOME}/.cache/v<< parameters.ansible_cisco_dnac_version >>/
 
   build: 
     parameters: 
@@ -71,101 +66,84 @@ jobs:
         type: string
         default: "6.9.0"
 
-    machine: true
-    resource_class: rukapse/dnacenter-ansible
-    working_directory: ~/repo 
-
+    #machine: true
+    docker:
+      - image: python:3.8.10
+    resource_class: rukapse/dnacenter-ansible-minikube
     environment:
       REPO_URL: << pipeline.trigger_parameters.github_app.repo_url >>
       CIRCLE_PROJECT_REPONAME: << pipeline.trigger_parameters.github_app.repo_name >>
       CIRCLE_PROJECT_BRANCHNAME: << pipeline.trigger_parameters.github_app.branch >>
-
     steps:
       - run:
           name: Debug information
           command: |
-            set -x 
             echo "REPO_URL: $REPO_URL"
             echo "CIRCLE_PROJECT_REPONAME: $CIRCLE_PROJECT_REPONAME"
             echo "CIRCLE_PROJECT_BRANCHNAME: $CIRCLE_PROJECT_BRANCHNAME"
-            env
-
+      - restore_cache:
+          keys:
+            - collection-<< pipeline.git.revision >>
       - run:
-          name: Custom Git Clone
-          command: git clone --depth=1 -b $CIRCLE_PROJECT_BRANCHNAME $REPO_URL
-
-      - run:
-          name: Create Roles File header
+          name: Skip if already build
           command: |
-            echo "---" > ccc_roles.yml
-            echo "- hosts: dnac_servers" >> ccc_roles.yml
-            echo "  gather_facts: no" >> ccc_roles.yml
-            echo "  connection: local" >> ccc_roles.yml
-            echo "  " >> ccc_roles.yml
-            echo "  tasks:" >> ccc_roles.yml
-            echo "  " >> ccc_roles.yml
-            echo "  vars:" >> ccc_roles.yml
-            echo "    debug: false" >> ccc_roles.yml
-            echo "  " >> ccc_roles.yml
-            echo "  roles:" >> ccc_roles.yml
-
-            cat ccc_roles.yml
-
+            if [ $(ls workspace/*tar.gz) ]; then
+                ls -alh workspace
+                circleci-agent step halt
+            fi
       - run:
-          name: Copy static files
-          command: |
-            mkdir -p group_vars
-            cp ${HOME}/static/group_vars/dnac_servers.yml group_vars/dnac_servers.yml
-            cp ${HOME}/static/hosts hosts
+          name: Clone repo to workspace
+          command: git clone --depth=1 -b $CIRCLE_PROJECT_BRANCHNAME $REPO_URL .
 
+      - restore_cache:
+          keys:
+            - pip-cache-{{ checksum "test-requirements.txt" }}
       - run:
           name: Activate Virtual Environment, Install ansible and Build collection tarball
           command: |
-            set -x 
-            # Activate Virtual Environment
-            export PYENV_ROOT="$HOME/.pyenv"
-            export PATH="$PYENV_ROOT/bin:$PATH"
-            export PATH="$PYENV_ROOT/shims/python3:$PATH"
-            export PATH="$PYENV_ROOT/shims/python:$PATH"
-            export PATH="$PYENV_ROOT/shims/pip:$PATH"
-            export PATH="$PYENV_ROOT/shims:$PATH"
-            export PYTHONPATH="$PYENV_ROOT/shims/python3:$PYTHONPATH"
-            export PYTHONPATH="$PYENV_ROOT/shims/python:$PYTHONPATH"
-            pyenv local ansible
-      
             # Install ansible, dnacentersdk
             pip install --upgrade pip
-            pip install jinja2 PyYAML cryptography paramiko
-            pip install pyzipper
-            pip install ansible 
-            pip install dnacentersdk
-            ansible --version
-
-            # Change directory to dnacenter-ansible
-            cd $HOME/repo/dnacenter-ansible
-            
+            pip install -r test-requirements.txt
             # Build collection and store resulting tarball in directory $HOME/.cache/v<< parameters.ansible_cisco_dnac_version >>/collection-tarballs
-            ansible-galaxy collection build --force --output-path "${HOME}/.cache/v<< parameters.ansible_cisco_dnac_version >>/collection-tarballs"
-
-      - run:
-          name: Remove Existing Directory
-          command: |
-            set -x 
-            rm -rf ${HOME}/repo/$CIRCLE_PROJECT_REPONAME
+            ansible-galaxy collection build --force --output-path workspace/
+      - save_cache:
+          key: collection-<< pipeline.git.revision >>
+          paths:
+            - 'workspace'
+      - save_cache:
+          key: pip-cache-{{ checksum "test-requirements.txt" }}
+          paths:
+            - ~/.cache/pip
 
   addrole:
-    machine: true
-    resource_class: rukapse/dnacenter-ansible
-    working_directory: ~/repo 
+    #machine: true
+    docker:
+      - image: python:3.8.10
+    resource_class: rukapse/dnacenter-ansible-minikube
 
     steps:
+      - run:
+          name: Create Roles File header
+          command: |
+            mkdir -p roles-file
+            echo "---" > roles-file/ccc_roles.yml
+            echo "- hosts: dnac_servers" >> roles-file/ccc_roles.yml
+            echo "  gather_facts: no" >> roles-file/ccc_roles.yml
+            echo "  connection: local" >> roles-file/ccc_roles.yml
+            echo "  " >> roles-file/ccc_roles.yml
+            echo "  tasks:" >> roles-file/ccc_roles.yml
+            echo "  " >> roles-file/ccc_roles.yml
+            echo "  vars:" >> roles-file/ccc_roles.yml
+            echo "    debug: false" >> roles-file/ccc_roles.yml
+            echo "  " >> roles-file/ccc_roles.yml
+            echo "  roles:" >> roles-file/ccc_roles.yml
       - when:
           condition: 
             or: [ << pipeline.parameters.run-site >>, << pipeline.parameters.run-all >> ]
           steps:
             - run: 
                 command: |
-                  echo "    - ccc_site_management" >> ccc_roles.yml
+                  echo "    - ccc_site_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
@@ -173,7 +151,7 @@ jobs:
           steps:
             - run: 
                 command: |
-                  echo "    - ccc_device_credential_management" >> ccc_roles.yml
+                  echo "    - ccc_device_credential_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
@@ -181,7 +159,7 @@ jobs:
           steps:
             - run: 
                 command: |
-                  echo "    - ccc_discovery_management" >> ccc_roles.yml
+                  echo "    - ccc_discovery_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
@@ -189,7 +167,7 @@ jobs:
           steps:
             - run: 
                 command: |
-                  echo "    - ccc_inventory_management" >> ccc_roles.yml
+                  echo "    - ccc_inventory_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
@@ -197,7 +175,7 @@ jobs:
           steps:
             - run: 
                 command: |
-                  echo "    - ccc_swim_management" >> ccc_roles.yml
+                  echo "    - ccc_swim_management" >> roles-file/ccc_roles.yml
 
 
       - when:
@@ -206,21 +184,22 @@ jobs:
           steps:
             - run: 
                 command: |
-                  echo "    - ccc_pnp_management" >> ccc_roles.yml
+                  echo "    - ccc_pnp_management" >> roles-file/ccc_roles.yml
 
-
-      - run:
-          command: cat ccc_roles.yml
-
+      - persist_to_workspace:
+          root: 'roles-file'
+          paths:
+            - 'ccc_roles.yml'
   sanity-tests:
     parameters: 
       ansible_cisco_dnac_version:
         type: string
         default: "6.9.0"
 
-    machine: true
-    resource_class: rukapse/dnacenter-ansible
-    working_directory: ~/repo 
+    #machine: true
+    docker:
+      - image: python:3.8.10
+    resource_class: rukapse/dnacenter-ansible-minikube 
 
     environment:
       REPO_URL: << pipeline.trigger_parameters.github_app.repo_url >>
@@ -231,76 +210,58 @@ jobs:
       - run:
           name: Debug information
           command: |
-            set -x 
             echo "REPO_URL: $REPO_URL"
             echo "CIRCLE_PROJECT_REPONAME: $CIRCLE_PROJECT_REPONAME"
             echo "CIRCLE_PROJECT_BRANCHNAME: $CIRCLE_PROJECT_BRANCHNAME"
-            env
 
       - run:
-          name: Custom Git Clone
-          command: git clone --depth=1 -b $CIRCLE_PROJECT_BRANCHNAME $REPO_URL
+          name: Clone repo to workspace
+          command: git clone --depth=1 -b $CIRCLE_PROJECT_BRANCHNAME $REPO_URL .
 
+      - attach_workspace:
+          at: roles-file
+
+      - restore_cache:
+          keys:
+            - collection-<< pipeline.git.revision >>
+      - restore_cache:
+          keys:
+            - pip-cache-{{ checksum "test-requirements.txt" }}
       - run:
           name: Activate Virtual Environment, Install ansible and Build collection tarball
           command: |
-            set -x 
-            # Activate Virtual Environment
-            export PYENV_ROOT="$HOME/.pyenv"
-            export PATH="$PYENV_ROOT/bin:$PATH"
-            export PATH="$PYENV_ROOT/shims/python3:$PATH"
-            export PATH="$PYENV_ROOT/shims/python:$PATH"
-            export PATH="$PYENV_ROOT/shims/pip:$PATH"
-            export PATH="$PYENV_ROOT/shims:$PATH"
-            export PYTHONPATH="$PYENV_ROOT/shims/python3:$PYTHONPATH"
-            export PYTHONPATH="$PYENV_ROOT/shims/python:$PYTHONPATH"
-            pyenv local ansible
-
-            export PATH="$HOME/.ansible/collections/:$PATH"
-            export PYTHONPATH="$HOME/.ansible/collections/:$PYTHONPATH"
-
             # Install ansible, dnacentersdk
             pip install --upgrade pip
-            pip install jinja2 PyYAML cryptography paramiko 
-            pip install pyzipper
-            pip install ansible 
-            pip install dnacentersdk
+            pip install -r test-requirements.txt
             ansible --version
-
-          environment:
-            PYTHONPATH: $HOME/.ansible/collections/:$PYTHONPATH
-
       - run:
           name: Install the collection tarball
           command: |
-            set -x 
-            pyenv versions
             python --version
             ansible --version  
-
-            ansible-galaxy collection install --force ${HOME}/.cache/v<< parameters.ansible_cisco_dnac_version >>/collection-tarballs/*.tar.gz
-            
+            ansible-galaxy collection install --force workspace/*.tar.gz
+      - run:
+          name: Copy static files
+          command: |
+            mkdir -p group_vars
+            cp roles-file/ccc_roles.yml ccc_roles.yml
+            echo ${GROUP_VARS} | base64 -d > group_vars/dnac_servers.yml
+            echo ${DNAC_HOSTS} | base64 -d > hosts
       - run:
           name: Run sanity tests
           command: |
             export ANSIBLE_PERSISTENT_CONNECT_TIMEOUT=1000
             export ANSIBLE_PERSISTENT_COMMAND_TIMEOUT=1000
-            export ANSIBLE_ROLES_PATH=/home/circleci/repo/dnacenter-ansible/tests/integration
-
+            export ANSIBLE_ROLES_PATH=$PWD/tests/integration
             ansible-playbook -i hosts ccc_roles.yml
 
           no_output_timeout: 120m
 
-      - run:
-          name: Remove Existing Directory
-          command: |
-            set -x 
-            rm -rf ${HOME}/repo/$CIRCLE_PROJECT_REPONAME
-
   post_pnp_testing:
-    machine: true
-    resource_class: rukapse/dnacenter-ansible
-    working_directory: ~/repo 
+    #machine: true
+    docker:
+      - image: python:3.8.10
+    resource_class: rukapse/dnacenter-ansible-minikube
 
     steps:
       - when:
@@ -308,11 +269,11 @@ jobs:
           steps:
             - run: 
                 command: |
-                  python ${HOME}/static/pnp_script.py
+                  python ${HOME}/static/pnp_script.py #TODO
 
 workflows:  
   
-  pre-testing:
+  building:
     when: << pipeline.parameters.run-setup >>
     jobs:
       - pre
@@ -352,14 +313,15 @@ workflows:
             tests/integration/ccc_swim_management/.* run-swim true
             tests/integration/ccc_pnp_management/.* run-pnp true
 
-  integration-testing:
-    when: << pipeline.parameters.run-any >> 
-    jobs:          
-      - addrole
-
+  testing:
+    when: << pipeline.parameters.run-any >>
+    jobs:
+      - addrole    
       - sanity-tests:
-          requires:
+          requires: 
             - addrole
+          context:
+            - dnac-servers
           matrix:
             parameters:
               ansible_cisco_dnac_version:
@@ -367,3 +329,4 @@ workflows:
       # - post_pnp_testing:
       #     requires:
       #       - sanity-tests
+ 
