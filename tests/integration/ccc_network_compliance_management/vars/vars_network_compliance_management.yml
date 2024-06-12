@@ -22,9 +22,99 @@ device_details:
     netconf_port: 830 
 
 
-run_complaince:
-  - ip_address_list: ['204.1.2.5'] 
+run_complaince_iplist:
+  - ip_address_list: ['204.1.2.5', '192.168.0.0']
 
+run_complaince_site:
+  - site_name: "Global"
+
+run_compliance_iplist_site:
+  - ip_address_list: ['204.1.2.5', '192.168.0.0']
+    site_name: "Global"
+
+run_compliance_category_iplist:
+  - ip_address_list: ['204.1.2.5', '192.168.0.0']
+    run_compliance_categories: ["INTENT", "RUNNING_CONFIG", "IMAGE", "PSIRT"]
+
+run_compliance_category_site:
+  - site_name: "Global"
+    run_compliance_categories: ["INTENT", "RUNNING_CONFIG", "IMAGE", "PSIRT"]
+
+run_compliance_false:
+  - ip_address_list: ['204.1.2.5', '192.168.0.0']
+    run_compliance: False
+
+sync_config_iplist:
+  - ip_address_list: ['204.1.2.5', '192.168.0.0']
+    sync_device_config: "True"
+
+sync_config_site:
+  - site_name: "Global"
+    sync_device_config: "True"
+
+sync_config_iplist_site:
+  - ip_address_list: ['204.1.2.5', '192.168.0.0']
+    site_name: "Global"
+    sync_device_config: "True"
+    run_compliance: True
+
+  # - ip_address_list: ['204.1.2.5', '192.168.0.0']
+  #   run_compliance: True
+
+  #- run_compliance: True
+
+  #- site_name: "Global"
+    #run_compliance_categories: ["INTENT"]
+
+
+  #- site_name: "Global"
+  #   run_compliance_categories: ["RUNNING_CONFIG"]
+  # - site_name: "Global"
+  #   run_compliance_categories: ["IMAGE"]
+  # - site_name: "Global"
+  #   run_compliance_categories: ["PSIRT"]
+  # - site_name: "Global"
+  #   run_compliance_categories: ["EOX"]
+  # - site_name: "Global"
+  #   run_compliance_categories: ["NETWORK_SETTINGS"]
+
+  #- ip_address_list: ['204.1.222.21', '204.1.218.11']
+  #   sync_device_config: True
+    #run_compliance_categories: ["RUNNING_CONFIG"]
+  #['INTENT', 'RUNNING_CONFIG', 'IMAGE', 'PSIRT', 'EOX', 'NETWORK_SETTINGS']
+
+  #- ip_address_list: ['204.1.2.5', '192.168.0.0']
+  #   sync_device_config: True
+  #   run_compliance: False 
+
+  # - site_name: 'Global'
+  #   sync_device_config: True
+  #   run_compliance: False 
+
+  #- site_name: 'Global'
+    #sync_device_config: True
+
+  # - ip_address_list: ['204.1.216.3'] 
+  #   site_name: 'Global'
+
+  #- site_name: 'Global'
+
+  # - ip_address_list: ['204.1.216.3'] 
+  #   run_compliance: True
+
+  # - ip_address_list: ['204.1.216.3'] 
+  #   site_name: 'Global'
+  #   run_compliance: True
+
+  # - ip_address_list: ['204.1.216.3'] 
+  #   run_compliance: False
+
+  # - site_name: 'Global'
+  #   run_compliance: True
+
+  # - ip_address_list: ['204.1.216.3'] 
+  #   site_name: 'Global'
+  #   run_compliance: False
 
 delete_devices:
   - ip_address_list: ["204.1.2.5"]
