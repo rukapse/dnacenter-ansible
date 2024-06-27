@@ -39,10 +39,6 @@ design_sites:
 
 
 
-
-
-
-
   - site:
       building:
         name: BLD10

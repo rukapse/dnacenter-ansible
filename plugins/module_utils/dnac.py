@@ -17,6 +17,7 @@ from ansible.module_utils.common import validation
 from abc import ABCMeta, abstractmethod
 try:
     import logging
+    import ipaddress
 except ImportError:
     LOGGING_IN_STANDARD = False
 else:
@@ -67,6 +68,7 @@ class DnacBase():
                                         'parsed': self.verify_diff_parsed
                                         }
         self.dnac_log = dnac_params.get("dnac_log")
+        self.max_timeout = self.params.get('dnac_api_task_timeout')
 
         if self.dnac_log and not DnacBase.__is_log_init:
             self.dnac_log_level = dnac_params.get("dnac_log_level") or 'WARNING'
@@ -256,6 +258,30 @@ class DnacBase():
 
         return re.match(pattern, password) is not None
 
+    def is_valid_email(self, email):
+        """
+        Validate an email address.
+        Args:
+            self (object): An instance of a class that provides access to Cisco Catalyst Center.
+            email (str): The email address to be validated.
+        Returns:
+            bool: True if the email is valid, False otherwise.
+        Description:
+            This function checks if the provided email address is valid based on the following criteria:
+            - It contains one or more alphanumeric characters or allowed special characters before the '@'.
+            - It contains one or more alphanumeric characters or dashes after the '@' and before the domain.
+            - It contains a period followed by at least two alphabetic characters at the end of the string.
+        The allowed special characters before the '@' are: ._%+-.
+        """
+
+        # Define the regex pattern for a valid email address
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        # Use re.match to see if the email matches the pattern
+        if re.match(pattern, email):
+            return True
+        else:
+            return False
+
     def get_dnac_params(self, params):
         """Store the Cisco Catalyst Center parameters from the playbook"""
 
@@ -300,14 +326,16 @@ class DnacBase():
 
         return result
 
-    def check_task_response_status(self, response, validation_string, data=False):
+    def check_task_response_status(self, response, validation_string, api_name, data=False):
         """
         Get the site id from the site name.
 
         Parameters:
             self - The current object details.
             response (dict) - API response.
-            validation_string (string) - String used to match the progress status.
+            validation_string (str) - String used to match the progress status.
+            api_name (str) - API name.
+            data (bool) - Set to True if the API is returning any information. Else, False.
 
         Returns:
             self
@@ -330,13 +358,27 @@ class DnacBase():
             return self
 
         task_id = response.get("taskId")
+        start_time = time.time()
         while True:
+            end_time = time.time()
+            if (end_time - start_time) >= self.max_timeout:
+                self.msg = "Max timeout of {max_timeout} sec has reached for the task id '{task_id}'. " \
+                           .format(max_timeout=self.max_timeout, task_id=task_id) + \
+                           "Exiting the loop due to unexpected API '{api_name}' status.".format(api_name=api_name)
+                self.log(self.msg, "WARNING")
+                self.status = "failed"
+                break
+
             task_details = self.get_task_details(task_id)
             self.log('Getting task details from task ID {0}: {1}'.format(task_id, task_details), "DEBUG")
 
             if task_details.get("isError") is True:
                 if task_details.get("failureReason"):
                     self.msg = str(task_details.get("failureReason"))
+                    string_check = "check task tree"
+                    if string_check in self.msg.lower():
+                        time.sleep(self.params.get('dnac_task_poll_interval'))
+                        self.msg = self.check_task_tree_response(task_id)
                 else:
                     self.msg = str(task_details.get("progress"))
                 self.status = "failed"
@@ -349,7 +391,7 @@ class DnacBase():
                 self.status = "success"
                 break
 
-            self.log("progress set to {0} for taskid: {1}".format(task_details.get('progress'), task_id), "DEBUG")
+            self.log("Progress is {0} for task ID: {1}".format(task_details.get('progress'), task_id), "DEBUG")
 
         return self
 
@@ -379,12 +421,13 @@ class DnacBase():
         self.log("Response for the current execution: {0}".format(response))
         return response
 
-    def check_execution_response_status(self, response):
+    def check_execution_response_status(self, response, api_name):
         """
         Checks the reponse status provided by API in the Cisco Catalyst Center
 
         Parameters:
             response (dict) - API response
+            api_name (str) - API name
 
         Returns:
             self
@@ -400,9 +443,19 @@ class DnacBase():
             self.status = "failed"
             return self
 
-        executionid = response.get("executionId")
+        execution_id = response.get("executionId")
+        start_time = time.time()
         while True:
-            execution_details = self.get_execution_details(executionid)
+            end_time = time.time()
+            if (end_time - start_time) >= self.max_timeout:
+                self.msg = "Max timeout of {max_timeout} sec has reached for the execution id '{execution_id}'. "\
+                           .format(max_timeout=self.max_timeout, execution_id=execution_id) + \
+                           "Exiting the loop due to unexpected API '{api_name}' status.".format(api_name=api_name)
+                self.log(self.msg, "WARNING")
+                self.status = "failed"
+                break
+
+            execution_details = self.get_execution_details(execution_id)
             if execution_details.get("status") == "SUCCESS":
                 self.result['changed'] = True
                 self.msg = "Successfully executed"
@@ -528,15 +581,14 @@ class DnacBase():
             response from the API. If the timeout is reached first, the method logs a warning and returns None.
         """
 
-        max_timeout = self.params.get('dnac_api_task_timeout')
         events_response = None
         start_time = time.time()
 
         while True:
             end_time = time.time()
-            if (end_time - start_time) >= max_timeout:
+            if (end_time - start_time) >= self.max_timeout:
                 self.log("""Max timeout of {0} sec has reached for the execution id '{1}' for the event and unexpected
-                        api status so moving out of the loop.""".format(max_timeout, status_execution_id), "WARNING")
+                        api status so moving out of the loop.""".format(self.max_timeout, status_execution_id), "WARNING")
                 break
             # Now we check the status of API Events for configuring destination and notifications
             response = self.dnac._exec(
@@ -552,6 +604,38 @@ class DnacBase():
             time.sleep(self.params.get('dnac_task_poll_interval'))
 
         return events_response
+
+    def is_valid_server_address(self, server_address):
+        """
+        Validates the server address to check if it's a valid IPv4, IPv6 address, or a valid hostname.
+        Args:
+            self (object): An instance of a class used for interacting with Cisco Catalyst Center.
+            server_address (str): The server address to validate.
+        Returns:
+            bool: True if the server address is valid, otherwise False.
+        """
+        # Check if the address is a valid IPv4 or IPv6 address
+        try:
+            ipaddress.ip_address(server_address)
+            return True
+        except ValueError:
+            pass
+
+        # Define the regex for a valid hostname
+        hostname_regex = re.compile(
+            r'^('  # Start of the string
+            r'([A-Za-z0-9]+([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,6}|'  # Domain name (e.g., example.com)
+            r'localhost|'  # Localhost
+            r'(\d{1,3}\.)+\d{1,3}|'  # Custom IPv4-like format (e.g., 2.2.3.31.3.4.4)
+            r'[A-Fa-f0-9:]+$'  # IPv6 address (e.g., 2f8:192:3::40:41:41:42)
+            r')$'  # End of the string
+        )
+
+        # Check if the address is a valid hostname
+        if hostname_regex.match(server_address):
+            return True
+
+        return False
 
     def is_path_exists(self, file_path):
         """
@@ -592,6 +676,37 @@ class DnacBase():
         except (ValueError, FileNotFoundError):
             self.log("The provided file '{0}' is not in JSON format".format(file_path), "CRITICAL")
             return False
+
+    def check_task_tree_response(self, task_id):
+        """
+        Returns the task tree response of the task ID.
+
+        Parameters:
+            task_id (string) - The unique identifier of the task for which you want to retrieve details.
+
+        Returns:
+            error_msg (str) - Returns the task tree error message of the task ID.
+        """
+
+        response = self.dnac._exec(
+            family="task",
+            function='get_task_tree',
+            params={"task_id": task_id}
+        )
+        self.log("Retrieving task tree details by the API 'get_task_tree' using task ID: {task_id}, Response: {response}"
+                 .format(task_id=task_id, response=response), "DEBUG")
+        error_msg = ""
+        if response and isinstance(response, dict):
+            result = response.get('response')
+            error_messages = []
+            for item in result:
+                if item.get("isError") is True:
+                    error_messages.append(item.get("progress"))
+
+            if error_messages:
+                error_msg = ". ".join(error_messages) + "."
+
+        return error_msg
 
 
 def is_list_complex(x):
