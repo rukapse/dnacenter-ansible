@@ -1,3 +1,4 @@
+---
 version: 2.1
 
 setup: << pipeline.parameters.run-setup >>
@@ -9,6 +10,21 @@ parameters:
   run-setup:
     type: boolean
     default: true
+  continued:
+    type: boolean
+    default: false
+  GHA_Event:
+    type: string
+    default: ""
+  GHA_Actor:
+    type: string
+    default: ""
+  GHA_Action:
+    type: string
+    default: ""
+  GHA_Meta:
+    type: string
+    default: ""
   run-any:
     type: boolean
     default: false
@@ -53,17 +69,14 @@ parameters:
     default: false
   run-networkcompliance:
     type: boolean
-    default: false    
+    default: false
+  ansible_cisco_dnac_version:
+    type: string
+    default: "6.17.0"
 
 jobs:
 
   pre:
-    parameters: 
-      ansible_cisco_dnac_version:
-        type: string
-        default: "6.9.0"
-
-    #machine: true
     docker:
       - image: python:3.8.10
     resource_class: madhansansel/dnacenter-ansible
@@ -72,18 +85,12 @@ jobs:
       - run:
           name: Debug information for pre
           command: |
-            set -x 
+            set -x
             echo "REPO_URL: $REPO_URL"
             echo "CIRCLE_PROJECT_REPONAME: $CIRCLE_PROJECT_REPONAME"
             echo "CIRCLE_PROJECT_BRANCHNAME: $CIRCLE_PROJECT_BRANCHNAME"
 
-  build: 
-    parameters: 
-      ansible_cisco_dnac_version:
-        type: string
-        default: "6.9.0"
-
-    #machine: true
+  build:
     docker:
       - image: python:3.8.10
     resource_class: madhansansel/dnacenter-ansible
@@ -120,7 +127,7 @@ jobs:
             # Install ansible, dnacentersdk
             pip install --upgrade pip
             pip install -r test-requirements.txt
-            # Build collection and store resulting tarball in directory $HOME/.cache/v<< parameters.ansible_cisco_dnac_version >>/collection-tarballs
+            # Build collection and store resulting tarball in directory $HOME/.cache/v<< pipeline.parameters.ansible_cisco_dnac_version >>/collection-tarballs
             ansible-galaxy collection build --force --output-path workspace/
       - save_cache:
           key: collection-<< pipeline.git.revision >>
@@ -132,7 +139,10 @@ jobs:
             - ~/.cache/pip
 
   addrole:
-    #machine: true
+    parameters:
+      run-all:
+        type: boolean
+        default: false
     docker:
       - image: python:3.8.10
     resource_class: madhansansel/dnacenter-ansible
@@ -144,106 +154,106 @@ jobs:
             mkdir -p roles-file
             touch roles-file/ccc_roles.yml
       - when:
-          condition: 
-            or: [ << pipeline.parameters.run-site >>, << pipeline.parameters.run-all >> ]
+          condition:
+            or: [<< pipeline.parameters.run-site >>, << pipeline.parameters.run-all >>]
           steps:
-            - run: 
+            - run:
                 command: |
                   echo "ccc_site_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
-            or: [ << pipeline.parameters.run-devicecredential >>, << pipeline.parameters.run-all >> ]
+            or: [<< pipeline.parameters.run-devicecredential >>, << pipeline.parameters.run-all >>]
           steps:
-            - run: 
+            - run:
                 command: |
                   echo "ccc_device_credential_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
-            or: [ << pipeline.parameters.run-discovery >>, << pipeline.parameters.run-all >> ]
+            or: [<< pipeline.parameters.run-discovery >>, << pipeline.parameters.run-all >>]
           steps:
-            - run: 
+            - run:
                 command: |
                   echo "ccc_discovery_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
-            or: [ << pipeline.parameters.run-inventory >>, << pipeline.parameters.run-all >> ]
+            or: [<< pipeline.parameters.run-inventory >>, << pipeline.parameters.run-all >>]
           steps:
-            - run: 
+            - run:
                 command: |
                   echo "ccc_inventory_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
-            or: [ << pipeline.parameters.run-swim >>, << pipeline.parameters.run-all >> ]
+            or: [<< pipeline.parameters.run-swim >>, << pipeline.parameters.run-all >>]
           steps:
-            - run: 
+            - run:
                 command: |
                   echo "ccc_swim_management" >> roles-file/ccc_roles.yml
 
       # - when:
       #     condition:
-      #       or: [ << pipeline.parameters.run-networksettings >>, << pipeline.parameters.run-all >> ]
+      #       or: [<< pipeline.parameters.run-networksettings >>, << pipeline.parameters.run-all >>]
       #     steps:
-      #       - run: 
+      #       - run:
       #           command: |
       #             echo "ccc_network_settings_management" >> roles-file/ccc_roles.yml
 
       # - when:
       #     condition:
-      #       or: [ << pipeline.parameters.run-serverintegrations >>, << pipeline.parameters.run-all >> ]
+      #       or: [<< pipeline.parameters.run-serverintegrations >>, << pipeline.parameters.run-all >>]
       #     steps:
-      #       - run: 
+      #       - run:
       #           command: |
       #             echo "ccc_aaa_server_management" >> roles-file/ccc_roles.yml
 
       # - when:
       #     condition:
-      #       or: [ << pipeline.parameters.run-template >>, << pipeline.parameters.run-all >> ]
+      #       or: [<< pipeline.parameters.run-template >>, << pipeline.parameters.run-all >>]
       #     steps:
-      #       - run: 
+      #       - run:
       #           command: |
       #             echo "ccc_template_management" >> roles-file/ccc_roles.yml
 
       # - when:
       #     condition:
-      #       or: [ << pipeline.parameters.run-eventsandnotif >>, << pipeline.parameters.run-all >> ]
+      #       or: [<< pipeline.parameters.run-eventsandnotif >>, << pipeline.parameters.run-all >>]
       #     steps:
-      #       - run: 
+      #       - run:
       #           command: |
       #             echo "ccc_events_and_notification_management" >> roles-file/ccc_roles.yml
 
       # - when:
       #     condition:
-      #       or: [ << pipeline.parameters.run-configbackups >>, << pipeline.parameters.run-all >> ]
+      #       or: [<< pipeline.parameters.run-configbackups >>, << pipeline.parameters.run-all >>]
       #     steps:
-      #       - run: 
+      #       - run:
       #           command: |
       #             echo "ccc_configbackups" >> roles-file/ccc_roles.yml
 
       # - when:
       #     condition:
-      #       or: [ << pipeline.parameters.run-provision >>, << pipeline.parameters.run-all >> ]
+      #       or: [<< pipeline.parameters.run-provision >>, << pipeline.parameters.run-all >>]
       #     steps:
-      #       - run: 
+      #       - run:
       #           command: |
       #             echo "ccc_provision" >> roles-file/ccc_roles.yml
 
       # - when:
       #     condition:
-      #       or: [ << pipeline.parameters.run-networkcompliance >>, << pipeline.parameters.run-all >> ]
+      #       or: [<< pipeline.parameters.run-networkcompliance >>, << pipeline.parameters.run-all >>]
       #     steps:
-      #       - run: 
+      #       - run:
       #           command: |
       #             echo "ccc_network_compliance_management" >> roles-file/ccc_roles.yml
 
       - when:
           condition:
-            or: [ << pipeline.parameters.run-pnp >>, << pipeline.parameters.run-all >> ]
+            or: [<< pipeline.parameters.run-pnp >>, << pipeline.parameters.run-all >>]
           steps:
-            - run: 
+            - run:
                 command: |
                   echo "ccc_pnp_management" >> roles-file/ccc_roles.yml
 
@@ -257,17 +267,20 @@ jobs:
           paths:
             - 'ccc_roles.yml'
   sanity-tests:
-    parameters: 
-      ansible_cisco_dnac_version:
-        type: string
-        default: "6.9.0"
-
-    #machine: true
     docker:
       - image: python:3.8.10
     resource_class: madhansansel/dnacenter-ansible
     parallelism: 4
     steps:
+      - when:
+          condition:
+            not: << pipeline.parameters.run-any >>
+          steps:
+            - run:
+                name: Finish sanity tests as there is nothing to execute
+                command: |
+                  circleci-agent step halt
+
       - run:
           name: Debug information
           command: |
@@ -284,6 +297,11 @@ jobs:
 
       - attach_workspace:
           at: roles-file
+
+      - run:
+          name: Finish sanity tests when roles file is empty
+          command: |
+            [ -s roles-file/ccc_roles.yml ] || circleci-agent step halt
 
       - restore_cache:
           keys:
@@ -302,7 +320,7 @@ jobs:
           name: Install the collection tarball
           command: |
             python --version
-            ansible --version  
+            ansible --version
             ansible-galaxy collection install --force workspace/*.tar.gz
       - run:
           name: Copy static files
@@ -319,12 +337,20 @@ jobs:
             export ANSIBLE_ROLES_PATH=$PWD/tests/integration
             cat ccc_roles.yml
             echo $(circleci tests glob "tests/integration/*")
-            cat ccc_roles.yml | circleci tests run --command "xargs ./run_tests.sh" --split-by=timings --timings-type=name
+            echo -n 0 > rc
+            cat ccc_roles.yml | circleci tests run --command "xargs ./run_tests.sh" --split-by=timings --timings-type=name || echo -n $? > rc
+            echo ${LOGS_SSH_KEY} | base64 -d > ~/id_ssh
+            chmod 600 ~/id_ssh
+            export NO_PROXY=""
+            export no_proxy=""
+            ssh $LOGS_MACHINE -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/id_ssh mkdir -p /var/www/html/madhan-logs/$CIRCLE_BUILD_NUM
+            scp -i ~/id_ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null sanity_tests_logs_$CIRCLE_NODE_INDEX $LOGS_MACHINE:/var/www/html/madhan-logs/$CIRCLE_BUILD_NUM
+            echo "LOGS URL: http://10.195.243.37/madhan-logs/$CIRCLE_BUILD_NUM/sanity_tests_logs_$CIRCLE_NODE_INDEX"
+            if [[ $(cat rc) != "0" ]]; then exit 1; fi
 
           no_output_timeout: 120m
 
   post_pnp_testing:
-    #machine: true
     docker:
       - image: python:3.8.10
     resource_class: madhansansel/dnacenter-ansible
@@ -333,22 +359,60 @@ jobs:
       - when:
           condition: << pipeline.parameters.run-pnp >>
           steps:
-            - run: 
+            - run:
                 command: |
                   python ${HOME}/static/pnp_script.py #TODO
 
-workflows:  
-  
+  main-pr:
+    docker:
+      - image: maniator/gh:v2.49.2
+    resource_class: madhansansel/dnacenter-ansible
+    steps:
+      - run:
+          name: Clone repo to workspace
+          command: git clone --depth=1 -b $CIRCLE_BRANCH https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME.git .
+      - run:
+          name: Create release pr to main
+          command: |
+            gh repo set-default $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME
+            gh pr create --base main --head $CIRCLE_BRANCH --title "Release v<< pipeline.parameters.ansible_cisco_dnac_version >>" --body "Release v<< pipeline.parameters.ansible_cisco_dnac_version >>"
+
+  release-job:
+    docker:
+      - image: python:3.8.10
+    resource_class: madhansansel/dnacenter-ansible
+    steps:
+      - run:
+          name: Clone repo to workspace
+          command: |
+            git clone --depth=1 https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME.git .
+            git fetch origin $CIRCLE_BRANCH:work
+            git checkout work
+      - restore_cache:
+          keys:
+            - collection-<< pipeline.git.revision >>
+      # - add_ssh_keys:
+      #     fingerprints:
+      #       - "KEY_FINGERPRINT"
+      - run:
+          echo create release
+          # git tag -a v<< pipeline.parameters.ansible_cisco_dnac_version >> -m "Ansible DNACCollection Version v<< pipeline.parameters.ansible_cisco_dnac_version >>"
+          # gh release create "v<< pipeline.parameters.ansible_cisco_dnac_version >>" --title "DNAC Collection Version v<< pipeline.parameters.ansible_cisco_dnac_version >>" --latest
+          # ansible-galaxy collection publish workspace/*.tar.gz --api-key=$GALAXYKEY
+
+workflows:
+
   building:
-    when: << pipeline.parameters.run-setup >>
+    when:
+      and:
+        - or:
+        - equal: [run-tests, << pipeline.parameters.GHA_Meta >>]
+        # - equal: [true, << pipeline.parameters.run-setup >>]
+        - not: << pipeline.parameters.continued >>
     jobs:
       - pre
 
       - build:
-          matrix:
-            parameters:
-              ansible_cisco_dnac_version:
-                - "6.9.0"
           requires:
             - pre
 
@@ -359,6 +423,7 @@ workflows:
           config-path: .circleci/config.yml
           mapping: |
             .* run-setup false
+            .* continued true
 
             plugins/.* run-any true
             tests/integration/.* run-any true
@@ -378,8 +443,8 @@ workflows:
             plugins/modules/device_configs_backup_workflow_manager.py run-configbackups true
             plugins/modules/provision_workflow_manager.py run-provision true
             plugins/modules/network_compliance_workflow_manager.py run-networkcompliance true
-            
-            tests/integration/ccc_site_management/.* run-site true    
+
+            tests/integration/ccc_site_management/.* run-site true
             tests/integration/ccc_device_credential_management/.* run-devicecredential true
             tests/integration/ccc_discovery_management/.* run-discovery true
             tests/integration/ccc_inventory_management/.* run-inventory true
@@ -389,24 +454,65 @@ workflows:
             tests/integration/ccc_aaa_server_management/.* run-serverintegrations true
             tests/integration/ccc_template_management/.* run-template true
             tests/integration/ccc_events_and_notification_management/.* run-eventsandnotif true
-            # tests/integration/? run-configbackups true
+            # tests/integration/ccc_device_configs_backup_management/.* run-configbackups true
             # tests/integration/? run-provision true
             tests/integration/ccc_network_compliance_management/.* run-networkcompliance true
 
   testing:
-    when: << pipeline.parameters.run-any >>
+    when:
+      or:
+        - equal: [true, << pipeline.parameters.run-any >>]
+        - equal: [true, << pipeline.parameters.continued >>]
     jobs:
-      - addrole    
+      - addrole
       - sanity-tests:
-          requires: 
+          requires:
             - addrole
           context:
             - dnac-servers
+            - logs-vm
+
+            # - post_pnp_testing:
+            #     requires:
+            #       - sanity-tests
+
+  release-candidate:
+    when:
+      or:
+        - equal: [run-release-prep, << pipeline.parameters.GHA_Meta >>]
+    jobs:
+      - build
+      - addrole:
           matrix:
             parameters:
-              ansible_cisco_dnac_version:
-                - "6.9.0"
-      # - post_pnp_testing:
-      #     requires:
-      #       - sanity-tests
- 
+              run-all:
+                - true
+      - sanity-tests:
+          requires:
+            - addrole
+            - build
+          context:
+            - dnac-servers
+      - hold:
+          type: approval
+          requires:
+            - sanity-tests
+
+      - main-pr:
+          context:
+            - gh-token
+          requires:
+            - hold
+
+  release:
+    when:
+      or:
+        - equal: [run-release, << pipeline.parameters.GHA_Meta >>]
+    jobs:
+      - build
+      - release-job:
+          requires:
+            - build
+          context:
+            - gh-token
+            - galaxy-token
