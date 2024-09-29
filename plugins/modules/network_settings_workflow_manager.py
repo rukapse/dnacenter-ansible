@@ -674,7 +674,7 @@ class NetworkSettings(DnacBase):
             None
 
         Returns:
-            self
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
 
         """
 
@@ -1044,12 +1044,22 @@ class NetworkSettings(DnacBase):
             if the response is not a dictionary or there was an error.
         """
 
-        response = self.dnac._exec(
-            family="network_settings",
-            function='get_network_v2',
-            op_modifies=True,
-            params={"site_id": site_id}
-        )
+        try:
+            response = self.dnac._exec(
+                family="network_settings",
+                function='get_network_v2',
+                op_modifies=True,
+                params={"site_id": site_id}
+            )
+        except Exception as msg:
+            self.msg = (
+                "Exception occurred while getting the network settings details "
+                "from Cisco Catalyst Center: {msg}".format(msg=msg)
+            )
+            self.log(str(msg), "ERROR")
+            self.status = "failed"
+            return self
+
         self.log("Received API response from 'get_network_v2': {0}".format(response), "DEBUG")
         if not isinstance(response, dict):
             self.log("Failed to retrieve the network details - "
@@ -1212,15 +1222,25 @@ class NetworkSettings(DnacBase):
         self.all_reserved_pool_details.update({site_id: []})
         start_time = time.time()
         while True:
-            response = self.dnac._exec(
-                family="network_settings",
-                function="get_reserve_ip_subpool",
-                op_modifies=True,
-                params={
-                    "site_id": site_id,
-                    "offset": value
-                }
-            )
+            try:
+                response = self.dnac._exec(
+                    family="network_settings",
+                    function="get_reserve_ip_subpool",
+                    op_modifies=True,
+                    params={
+                        "site_id": site_id,
+                        "offset": value
+                    }
+                )
+            except Exception as msg:
+                self.msg = (
+                    "Exception occurred while getting the reserved pool details "
+                    "from Cisco Catalyst Center: {msg}".format(msg=msg)
+                )
+                self.log(str(msg), "ERROR")
+                self.status = "failed"
+                return self
+
             if not isinstance(response, dict):
                 self.msg = "Error in getting reserve pool - Response is not a dictionary"
                 self.log(self.msg, "CRITICAL")
@@ -1267,11 +1287,21 @@ class NetworkSettings(DnacBase):
         }
         value = 1
         while True:
-            response = self.dnac._exec(
-                family="network_settings",
-                function="get_global_pool",
-                params={"offset": value}
-            )
+            try:
+                response = self.dnac._exec(
+                    family="network_settings",
+                    function="get_global_pool",
+                    params={"offset": value}
+                )
+            except Exception as msg:
+                self.msg = (
+                    "Exception occurred while getting the global pool details with name '{name}': {msg}"
+                    .format(name=name, msg=msg)
+                )
+                self.log(str(msg), "ERROR")
+                self.status = "failed"
+                return self
+
             if not isinstance(response, dict):
                 self.msg = "Failed to retrieve the global pool details - Response is not a dictionary"
                 self.log(self.msg, "CRITICAL")
@@ -1595,11 +1625,21 @@ class NetworkSettings(DnacBase):
 
         value = 1
         while True:
-            response = self.dnac._exec(
-                family="network_settings",
-                function="get_global_pool",
-                params={"offset": value}
-            )
+            try:
+                response = self.dnac._exec(
+                    family="network_settings",
+                    function="get_global_pool",
+                    params={"offset": value}
+                )
+            except Exception as msg:
+                self.msg = (
+                    "Exception occurred while getting the global pool details with name '{name}': {msg}"
+                    .format(name=global_pool_name, msg=msg)
+                )
+                self.log(str(msg), "ERROR")
+                self.status = "failed"
+                return self
+
             value += 25
             if not isinstance(response, dict):
                 self.msg = "Failed to retrieve the global pool details - Response is not a dictionary"
@@ -1990,26 +2030,29 @@ class NetworkSettings(DnacBase):
                     return self
 
                 primary_server_address = network_aaa.get("primary_server_address")
-                if primary_server_address:
-                    want_network_settings.get("network_aaa").update({
-                        "network": primary_server_address
-                    })
-                else:
+                if not primary_server_address:
                     self.msg = "Missing required parameter 'primary_server_address' in network_aaa."
                     self.status = "failed"
                     return self
 
                 if server_type == "ISE":
+                    want_network_settings.get("network_aaa").update({
+                        "ipAddress": primary_server_address
+                    })
                     pan_address = network_aaa.get("pan_address")
                     if pan_address:
                         want_network_settings.get("network_aaa").update({
-                            "ipAddress": pan_address
+                            "network": pan_address
                         })
                     else:
                         self.msg = "Missing required parameter 'pan_address' for ISE server in network_aaa."
                         self.status = "failed"
                         return self
+
                 else:
+                    want_network_settings.get("network_aaa").update({
+                        "network": primary_server_address
+                    })
                     secondary_server_address = network_aaa.get("secondary_server_address")
                     if secondary_server_address:
                         want_network_settings.get("network_aaa").update({
@@ -2064,26 +2107,28 @@ class NetworkSettings(DnacBase):
                     return self
 
                 primary_server_address = client_and_endpoint_aaa.get("primary_server_address")
-                if primary_server_address:
-                    want_network_settings.get("clientAndEndpoint_aaa").update({
-                        "network": primary_server_address
-                    })
-                else:
+                if not primary_server_address:
                     self.msg = "Missing required parameter 'primary_server_address' in client_and_endpoint_aaa."
                     self.status = "failed"
                     return self
 
                 if server_type == "ISE":
+                    want_network_settings.get("clientAndEndpoint_aaa").update({
+                        "ipAddress": primary_server_address
+                    })
                     pan_address = client_and_endpoint_aaa.get("pan_address")
                     if pan_address:
                         want_network_settings.get("clientAndEndpoint_aaa").update({
-                            "ipAddress": pan_address
+                            "network": pan_address
                         })
                     else:
                         self.msg = "Missing required parameter 'pan_address' for ISE server in client_and_endpoint_aaa."
                         self.status = "failed"
                         return self
                 else:
+                    want_network_settings.get("clientAndEndpoint_aaa").update({
+                        "network": primary_server_address
+                    })
                     secondary_server_address = client_and_endpoint_aaa.get("secondary_server_address")
                     if secondary_server_address:
                         want_network_settings.get("clientAndEndpoint_aaa").update({
@@ -2147,7 +2192,7 @@ class NetworkSettings(DnacBase):
             config (list of dict) - Playbook details
 
         Returns:
-            None
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         if config.get("global_pool_details"):
@@ -2175,7 +2220,7 @@ class NetworkSettings(DnacBase):
             global_pool (list of dict) - Global Pool playbook details
 
         Returns:
-            None
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         create_global_pool = []
@@ -2202,12 +2247,22 @@ class NetworkSettings(DnacBase):
                     "ippool": copy.deepcopy(create_global_pool)
                 }
             }
-            response = self.dnac._exec(
-                family="network_settings",
-                function="create_global_pool",
-                op_modifies=True,
-                params=pool_params,
-            )
+            try:
+                response = self.dnac._exec(
+                    family="network_settings",
+                    function="create_global_pool",
+                    op_modifies=True,
+                    params=pool_params,
+                )
+            except Exception as msg:
+                self.msg = (
+                    "Exception occurred while creating the global pools: {msg}"
+                    .format(msg=msg)
+                )
+                self.log(str(msg), "ERROR")
+                self.status = "failed"
+                return self
+
             self.check_execution_response_status(response, "create_global_pool").check_return_status()
             self.log("Successfully created global pool successfully.", "INFO")
             for item in pool_params.get("settings").get("ippool"):
@@ -2245,12 +2300,21 @@ class NetworkSettings(DnacBase):
                         del item[key]
 
                 self.log("Desired global pool details (want): {0}".format(pool_params), "DEBUG")
-                response = self.dnac._exec(
-                    family="network_settings",
-                    function="update_global_pool",
-                    op_modifies=True,
-                    params=pool_params,
-                )
+                try:
+                    response = self.dnac._exec(
+                        family="network_settings",
+                        function="update_global_pool",
+                        op_modifies=True,
+                        params=pool_params,
+                    )
+                except Exception as msg:
+                    self.msg = (
+                        "Exception occurred while updating the global pools: {msg}"
+                        .format(msg=msg)
+                    )
+                    self.log(str(msg), "ERROR")
+                    self.status = "failed"
+                    return self
 
                 self.check_execution_response_status(response, "update_global_pool").check_return_status()
                 for item in pool_params.get("settings").get("ippool"):
@@ -2260,7 +2324,7 @@ class NetworkSettings(DnacBase):
                     result_global_pool.get("msg").update({name: "Global Pool Updated Successfully"})
 
         self.log("Global pool configuration operations completed successfully.", "INFO")
-        return
+        return self
 
     def update_reserve_pool(self, reserve_pool):
         """
@@ -2272,7 +2336,7 @@ class NetworkSettings(DnacBase):
             reserve_pool (list of dict) - Playbook details containing Reserve Pool information.
 
         Returns:
-            None
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         reserve_pool_index = -1
@@ -2295,12 +2359,22 @@ class NetworkSettings(DnacBase):
             if not self.have.get("reservePool")[reserve_pool_index].get("exists"):
                 self.log("Desired reserved pool '{0}' details (want): {1}"
                          .format(name, reserve_params), "DEBUG")
-                response = self.dnac._exec(
-                    family="network_settings",
-                    function="reserve_ip_subpool",
-                    op_modifies=True,
-                    params=reserve_params,
-                )
+                try:
+                    response = self.dnac._exec(
+                        family="network_settings",
+                        function="reserve_ip_subpool",
+                        op_modifies=True,
+                        params=reserve_params,
+                    )
+                except Exception as msg:
+                    self.msg = (
+                        "Exception occurred while reserving the global pool with the name '{name}' "
+                        "in site '{site}: {msg}".format(name=name, site=site_name, msg=msg)
+                    )
+                    self.log(str(msg), "ERROR")
+                    self.status = "failed"
+                    return self
+
                 self.check_execution_response_status(response, "reserve_ip_subpool").check_return_status()
                 self.log("Successfully created IP subpool reservation '{0}'.".format(name), "INFO")
                 result_reserve_pool.get("response") \
@@ -2326,12 +2400,22 @@ class NetworkSettings(DnacBase):
             self.log("Desired reserved ip pool '{0}' details: {1}"
                      .format(name, self.want.get("wantReserve")), "DEBUG")
             reserve_params.update({"id": self.have.get("reservePool")[reserve_pool_index].get("id")})
-            response = self.dnac._exec(
-                family="network_settings",
-                function="update_reserve_ip_subpool",
-                op_modifies=True,
-                params=reserve_params,
-            )
+            try:
+                response = self.dnac._exec(
+                    family="network_settings",
+                    function="update_reserve_ip_subpool",
+                    op_modifies=True,
+                    params=reserve_params,
+                )
+            except Exception as msg:
+                self.msg = (
+                    "Exception occurred while updating the global pool with name '{name}': {msg}"
+                    .format(name=name, msg=msg)
+                )
+                self.log(str(msg), "ERROR")
+                self.status = "failed"
+                return self
+
             self.check_execution_response_status(response, "update_reserve_ip_subpool").check_return_status()
             self.log("Reserved ip subpool '{0}' updated successfully.".format(name), "INFO")
             result_reserve_pool.get("response") \
@@ -2342,7 +2426,7 @@ class NetworkSettings(DnacBase):
                 .update({name: "Reserved Ip Subpool updated successfully."})
 
         self.log("Updated reserved IP subpool successfully", "INFO")
-        return
+        return self
 
     def update_network(self, network_management):
         """
@@ -2353,7 +2437,7 @@ class NetworkSettings(DnacBase):
             network_management (list of dict) - Playbook details containing Network Management information.
 
         Returns:
-            None
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
         network_management_index = 0
         for item in network_management:
@@ -2393,12 +2477,10 @@ class NetworkSettings(DnacBase):
                     params=net_params,
                 )
             except Exception as msg:
-                if "[400] Bad Request" in str(msg):
-                    self.msg = (
-                        "Received Bad Request [400] from the Catalyst Center. "
-                        "Please provide valid input or check the server IPs under the network_management_details."
-                    )
-
+                self.msg = (
+                    "Exception occurred while updating the network settings of '{site_name}': {msg}"
+                    .format(site_name=site_name, msg=msg)
+                )
                 self.log(str(msg), "ERROR")
                 self.status = "failed"
                 return self
@@ -2413,7 +2495,7 @@ class NetworkSettings(DnacBase):
                 .update({"Network Details": self.want.get("wantNetwork")[network_management_index].get("settings")})
             network_management_index += 1
 
-        return
+        return self
 
     def get_diff_merged(self, config):
         """
@@ -2425,20 +2507,20 @@ class NetworkSettings(DnacBase):
             Global Pool, Reserve Pool, and Network Management information.
 
         Returns:
-            self
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         global_pool = config.get("global_pool_details")
         if global_pool is not None:
-            self.update_global_pool(global_pool)
+            self.update_global_pool(global_pool).check_return_status()
 
         reserve_pool = config.get("reserve_pool_details")
         if reserve_pool is not None:
-            self.update_reserve_pool(reserve_pool)
+            self.update_reserve_pool(reserve_pool).check_return_status()
 
         network_management = config.get("network_management_details")
         if network_management is not None:
-            self.update_network(network_management)
+            self.update_network(network_management).check_return_status()
 
         return self
 
@@ -2450,7 +2532,7 @@ class NetworkSettings(DnacBase):
             reserve_pool_details (list of dict) - Reserverd pool playbook details.
 
         Returns:
-            self
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         reserve_pool_index = -1
@@ -2469,12 +2551,22 @@ class NetworkSettings(DnacBase):
                      .format(self.have.get("reservePool")[reserve_pool_index].get("name")), "INFO")
             _id = self.have.get("reservePool")[reserve_pool_index].get("id")
             self.log("Reserved pool '{0}' id: {1}".format(name, _id), "DEBUG")
-            response = self.dnac._exec(
-                family="network_settings",
-                function="release_reserve_ip_subpool",
-                op_modifies=True,
-                params={"id": _id},
-            )
+            try:
+                response = self.dnac._exec(
+                    family="network_settings",
+                    function="release_reserve_ip_subpool",
+                    op_modifies=True,
+                    params={"id": _id},
+                )
+            except Exception as msg:
+                self.msg = (
+                    "Exception occurred while updating the reserved pool with the name '{name}': {msg}"
+                    .format(name=name, msg=msg)
+                )
+                self.log(str(msg), "ERROR")
+                self.status = "failed"
+                return self
+
             self.check_execution_response_status(response, "release_reserve_ip_subpool").check_return_status()
             executionid = response.get("executionId")
             result_reserve_pool = self.result.get("response")[1].get("reservePool")
@@ -2496,7 +2588,7 @@ class NetworkSettings(DnacBase):
             global_pool_details (dict) - Global pool details of the playbook
 
         Returns:
-            self
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         result_global_pool = self.result.get("response")[0].get("globalPool")
@@ -2511,12 +2603,21 @@ class NetworkSettings(DnacBase):
                 continue
 
             id = item.get("id")
-            response = self.dnac._exec(
-                family="network_settings",
-                function="delete_global_ip_pool",
-                op_modifies=True,
-                params={"id": id},
-            )
+            try:
+                response = self.dnac._exec(
+                    family="network_settings",
+                    function="delete_global_ip_pool",
+                    op_modifies=True,
+                    params={"id": id},
+                )
+            except Exception as msg:
+                self.msg = (
+                    "Exception occurred while deleting the global pool with '{name}': {msg}"
+                    .format(name=name, msg=msg)
+                )
+                self.log(str(msg), "ERROR")
+                self.status = "failed"
+                return self
 
             # Check the execution status
             self.check_execution_response_status(response, "delete_global_ip_pool").check_return_status()
@@ -2540,7 +2641,7 @@ class NetworkSettings(DnacBase):
             config (list of dict) - Playbook details
 
         Returns:
-            self
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         reserve_pool_details = config.get("reserve_pool_details")
@@ -2563,7 +2664,7 @@ class NetworkSettings(DnacBase):
             Reserved Pool, and Network Management configuration.
 
         Returns:
-            self
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         self.all_reserved_pool_details = {}
@@ -2646,7 +2747,7 @@ class NetworkSettings(DnacBase):
             Reserved Pool, and Network Management configuration.
 
         Returns:
-            self
+            self - The current object with Global Pool, Reserved Pool, Network Servers information.
         """
 
         self.all_reserved_pool_details = {}
