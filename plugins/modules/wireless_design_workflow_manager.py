@@ -4012,6 +4012,7 @@ from ansible_collections.cisco.dnac.plugins.module_utils.dnac import (
     DnacBase,
     validate_list_of_dicts
 )
+# from ansible_collections.cisco.dnac.plugins.module_utils.state_manager import StateManager
 import re
 import datetime
 import yaml
@@ -4043,6 +4044,8 @@ class WirelessDesign(DnacBase):
         super().__init__(module)
         self.module_mapping = self.wireless_design_workflow_manager_mapping()
         self.module_name = "wireless_design_workflow_manager"
+        self.state_manager = self.initialize_state_manager(self.module_name)
+        self.log("Inititialized state manager: {0}".format(self.state_manager), "DEBUG")
 
     def validate_input(self):
         """
@@ -8433,7 +8436,16 @@ class WirelessDesign(DnacBase):
             tuple: Three lists containing interfaces to be created, updated, and not updated.
         """
         # Retrieve all existing interfaces
-        existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        # existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        get_interfaces_params = {}
+        existing_interfaces = self.state_manager.get_or_update_cache(
+            api_family="wireless",
+            api_function="get_interfaces",
+            params=get_interfaces_params,
+            api_call_function=self.get_interfaces,
+            always_update_cache=False,
+            get_interfaces_params=get_interfaces_params       
+        )
         self.log("Retrieved existing interfaces.", "DEBUG")
 
         self.log("Existing Interfaces: {0}".format(existing_interfaces), "DEBUG")
@@ -8508,7 +8520,16 @@ class WirelessDesign(DnacBase):
         self.log("Starting verification of interfaces for deletion.", "INFO")
 
         # Retrieve all existing interfaces
-        existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        # existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        get_interfaces_params = {}
+        existing_interfaces = self.state_manager.get_or_update_cache(
+            api_family="wireless",
+            api_function="get_interfaces",
+            params=get_interfaces_params,
+            api_call_function=self.get_interfaces,
+            always_update_cache=False,
+            get_interfaces_params=get_interfaces_params       
+        )
         self.log("Existing Interfaces: {0}".format(existing_interfaces), "DEBUG")
 
         # Convert existing interfaces to a dictionary for quick lookup by interface name
@@ -8720,7 +8741,16 @@ class WirelessDesign(DnacBase):
             add_interfaces_params (list): A list of dictionaries containing parameters for each interface to be added.
         """
         # Retrieve all existing interfaces
-        existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        # existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        get_interfaces_params = {}
+        existing_interfaces = self.state_manager.get_or_update_cache(
+            api_family="wireless",
+            api_function="get_interfaces",
+            params=get_interfaces_params,
+            api_call_function=self.get_interfaces,
+            always_update_cache=True,
+            get_interfaces_params=get_interfaces_params       
+        )
         # Create a set of existing interface names for quick lookup
         existing_interface_names = {interface["interfaceName"] for interface in existing_interfaces}
         self.log("Retrieved existing interfaces.", "DEBUG")
@@ -8754,7 +8784,16 @@ class WirelessDesign(DnacBase):
             update_interfaces_params (list): A list of dictionaries containing parameters for each interface to be updated.
         """
         # Retrieve all existing interfaces
-        existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        # existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        get_interfaces_params = {}
+        existing_interfaces = self.state_manager.get_or_update_cache(
+            api_family="wireless",
+            api_function="get_interfaces",
+            params=get_interfaces_params,
+            api_call_function=self.get_interfaces,
+            always_update_cache=True,
+            get_interfaces_params=get_interfaces_params       
+        )
         # Create a dictionary of existing interfaces for quick lookup by interface name and VLAN ID
         existing_interfaces_dict = {(interface["interfaceName"], interface["vlanId"]): interface for interface in existing_interfaces}
         self.log("Retrieved existing interfaces and created lookup dictionary.", "DEBUG")
@@ -8789,7 +8828,16 @@ class WirelessDesign(DnacBase):
             delete_interfaces_params (list): A list of dictionaries containing parameters for each interface to be deleted.
         """
         # Retrieve all existing interfaces
-        existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        # existing_interfaces = self.get_interfaces(get_interfaces_params={})
+        get_interfaces_params = {}
+        existing_interfaces = self.state_manager.get_or_update_cache(
+            api_family="wireless",
+            api_function="get_interfaces",
+            params=get_interfaces_params,
+            api_call_function=self.get_interfaces,
+            always_update_cache=True,
+            get_interfaces_params=get_interfaces_params       
+        )
         # Create a set of existing interface names for quick lookup
         existing_interface_names = {interface["interfaceName"] for interface in existing_interfaces}
         self.log("Retrieved existing interfaces.", "DEBUG")
@@ -13344,6 +13392,7 @@ class WirelessDesign(DnacBase):
 def main():
     """ main entry point for module execution
     """
+
     # Define the specification for the module"s arguments
     element_spec = {
         "dnac_host": {"required": True, "type": "str"},
@@ -13362,7 +13411,10 @@ def main():
         "dnac_api_task_timeout": {"type": "int", "default": 1200},
         "dnac_task_poll_interval": {"type": "int", "default": 2},
         "config": {"required": True, "type": "list", "elements": "dict"},
-        "state": {"default": "merged", "choices": ["merged", "deleted"]}
+        "state": {"default": "merged", "choices": ["merged", "deleted"]},
+        "enable_state_manager": {"type": "bool", "default": False},
+        "state_file_path": {"type": "str", "default": "./states/wireless_design_workflow_manager.state"},
+        "refresh_state": {"type": "bool", "default": False},
     }
 
     # Initialize the Ansible module with the provided argument specifications
@@ -13371,6 +13423,10 @@ def main():
 
     # Initialize the NetworkCompliance object with the module
     ccc_wireless_design = WirelessDesign(module)
+
+    # Set the start time for the module operation
+    ccc_wireless_design.set_module_start_time()
+
     if ccc_wireless_design.compare_dnac_versions(ccc_wireless_design.get_ccc_version(), "2.3.7.9") < 0:
         ccc_wireless_design.msg = (
             "The specified version '{0}' does not support the Wireless Design Operations. Supported versions start "
@@ -13404,6 +13460,10 @@ def main():
 
         if config_verify:
             ccc_wireless_design.verify_diff_state_apply[state]().check_return_status()
+
+    # Set the end time for the module operation and calculate the execution time
+    ccc_wireless_design.set_module_end_time()
+    ccc_wireless_design.calculate_execution_time()
 
     module.exit_json(**ccc_wireless_design.result)
 

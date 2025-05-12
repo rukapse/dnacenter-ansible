@@ -36,7 +36,7 @@ import re
 import socket
 import time
 import traceback
-
+from ansible_collections.cisco.dnac.plugins.module_utils.state_manager import StateManager
 
 class DnacBase():
 
@@ -119,6 +119,8 @@ class DnacBase():
         self.log('Cisco Catalyst Center parameters: {0}'.format(masked_config), "DEBUG")
         self.supported_states = ["merged", "deleted", "replaced", "overridden", "gathered", "rendered", "parsed"]
         self.result = {"changed": False, "diff": [], "response": [], "warnings": []}
+        self.module_start_time = None
+        self.module_end_time = None
 
     def compare_dnac_versions(self, version1, version2):
         """
@@ -2218,6 +2220,50 @@ class DnacBase():
         return any(not dnac_compare_equality(current_obj.get(dnac_param),
                                              requested_obj.get(ansible_param))
                    for (dnac_param, ansible_param) in obj_params)
+
+    def set_module_start_time(self):
+        """Sets the start time for the operation."""
+        self.module_start_time = time.time()
+
+    def set_module_end_time(self):
+        """Sets the end time for the operation."""
+        self.module_end_time = time.time()
+
+    def calculate_execution_time(self):
+        """
+        Calculate the execution time in seconds between start_time and end_time.
+        Args:
+            start_time (float): The start time of the operation.
+            end_time (float): The end time of the operation.
+        Returns:
+            float: The execution time in seconds.
+        """
+        execution_time = round(self.module_end_time - self.module_start_time, 2)
+        self.log("Execution time: {0} seconds".format(execution_time), "INFO")
+        self.result.update({"execution_time": execution_time})
+
+        return self
+
+    def initialize_state_manager(self, module_name):
+        """
+        Initialize the StateManager for a given module.
+        Args:
+            module_name (str): The name of the module using the StateManager.
+            module_params (dict): The parameters passed to the module.
+        Returns:
+            StateManager: An instance of the StateManager class.
+        """
+        enable_state_manager = self.params.get("enable_state_manager")
+        state_file_path = self.params.get("state_file_path")
+        refresh_state = self.params.get("refresh_state")
+
+        return StateManager(
+            module_name=module_name,
+            enable_state_manager=enable_state_manager,
+            state_file_path=state_file_path,
+            refresh_state=refresh_state,
+            logger=self.log
+        )
 
 
 def is_list_complex(x):
