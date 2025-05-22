@@ -12068,6 +12068,13 @@ class WirelessDesign(DnacBase):
         modified_wireless_interfaces_details = self.modify_parameters(wireless_interfaces_temp_spec, accumulated_interfaces)
         self.log("Modified Interfaces details: {0}".format(modified_wireless_interfaces_details), "INFO")
 
+        # Remove the specific interface with interface_name 'management' and vlan_id 0
+        modified_wireless_interfaces_details = [
+            interface for interface in modified_wireless_interfaces_details
+            if not (interface.get("interface_name") == "management" and interface.get("vlan_id") == 0)
+        ]
+        self.log("Filtered Interfaces details: {0}".format(modified_wireless_interfaces_details), "INFO")
+
         interfaces = {"interfaces": modified_wireless_interfaces_details}
         self.log("Modified Interfaces: {0}".format(interfaces), "INFO")
         return interfaces
