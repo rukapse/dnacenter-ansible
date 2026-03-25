@@ -1,0 +1,214 @@
+---
+- name: "SDA Host Port Onboarding — Device Refresh Migration"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars_device_refresh.yml
+
+  vars:
+    dnac_login: &dnac_login
+      dnac_host: "{{ catalyst_center_host }}"
+      dnac_username: "{{ catalyst_center_username }}"
+      dnac_password: "{{ catalyst_center_password }}"
+      dnac_verify: "{{ catalyst_center_verify }}"
+      dnac_port: "{{ catalyst_center_port }}"
+      dnac_version: "{{ catalyst_center_version }}"
+      dnac_debug: "{{ catalyst_center_debug }}"
+      dnac_log: true
+      dnac_log_level: "DEBUG"
+      dnac_api_task_timeout: "{{ catalyst_center_api_task_timeout }}"
+      dnac_log_append: false
+
+  tasks:
+
+    # ========================================================================
+    #  PHASE 1: EXTRACT — Pull config from source device
+    # ========================================================================
+
+    - name: "PHASE 1 Banner"
+      ansible.builtin.debug:
+        msg: "PHASE 1: Extracting host port onboarding config from source device {{ source_device_ip }}"
+      tags: [extract]
+
+    - name: "Clean up previous extracted config file"
+      ansible.builtin.file:
+        path: "{{ extracted_config_file }}"
+        state: absent
+      tags: [extract]
+
+    - name: "Extract SDA host port onboarding config from source device"
+      cisco.dnac.sda_host_port_onboarding_playbook_config_generator:
+        <<: *dnac_login
+        state: gathered
+        file_path: "{{ extracted_config_file }}"
+        file_mode: overwrite
+        config:
+          component_specific_filters:
+            components_list: "{{ components_to_migrate }}"
+            port_assignments:
+              fabric_site_name_hierarchy:
+                - "{{ fabric_site_hierarchy }}"
+            port_channels:
+              fabric_site_name_hierarchy:
+                - "{{ fabric_site_hierarchy }}"
+            wireless_ssids:
+              fabric_site_name_hierarchy:
+                - "{{ fabric_site_hierarchy }}"
+      register: extraction_result
+      tags: [extract]
+
+    - name: "Verify extraction succeeded"
+      ansible.builtin.assert:
+        that:
+          - extraction_result is not failed
+        fail_msg: "PHASE 1 FAILED: Config extraction from source device {{ source_device_ip }} did not succeed. Check dnac.log for details."
+        success_msg: "PHASE 1 PASSED: Config extraction completed successfully."
+      tags: [extract]
+
+    - name: "Show extraction result summary"
+      ansible.builtin.debug:
+        msg:
+          - "Extraction result: {{ extraction_result.msg | default(extraction_result) }}"
+          - "Extracted config saved to: {{ extracted_config_file }}"
+      tags: [extract]
+
+    # ========================================================================
+    #  PHASE 2: TRANSFORM — Load extracted YAML & swap source IP with dest IP
+    # ========================================================================
+
+    - name: "PHASE 2 Banner"
+      ansible.builtin.debug:
+        msg: "PHASE 2: Transforming config — retargeting from {{ source_device_ip }} to {{ destination_device_ip }}"
+      tags: [transform]
+
+    - name: "Read extracted config file"
+      ansible.builtin.slurp:
+        src: "{{ extracted_config_file }}"
+      register: slurp_result
+      tags: [transform]
+
+    - name: "Parse extracted config YAML"
+      ansible.builtin.set_fact:
+        extracted_full_yaml: "{{ (slurp_result.content | b64decode | from_yaml) }}"
+      tags: [transform]
+
+    - name: "Filter source device configs and retarget to destination device"
+      ansible.builtin.set_fact:
+        destination_config: >-
+          {{
+            extracted_full_yaml.config
+            | selectattr('ip_address', 'equalto', source_device_ip)
+            | list
+            | map('combine', {'ip_address': destination_device_ip})
+            | list
+          }}
+      tags: [transform]
+
+    - name: "Verify destination config is not empty"
+      ansible.builtin.assert:
+        that:
+          - destination_config | length > 0
+        fail_msg: >-
+          PHASE 2 FAILED: No config entries found for source device {{ source_device_ip }}
+          in extracted file {{ extracted_config_file }}.
+          Verify that the source device IP is correct and that it has host port onboarding
+          configurations in the specified fabric site.
+        success_msg: "PHASE 2 PASSED: Found {{ destination_config | length }} config entries to migrate."
+      tags: [transform]
+
+    - name: "Show transformation summary"
+      ansible.builtin.debug:
+        msg:
+          - "Config entries transformed: {{ destination_config | length }}"
+          - "Components found: {% for entry in destination_config %}{{ (entry.keys() | list | difference(['ip_address', 'fabric_site_name_hierarchy'])) | first }}{% if not loop.last %}, {% endif %}{% endfor %}"
+          - "Source IP {{ source_device_ip }} → Destination IP {{ destination_device_ip }}"
+      tags: [transform]
+
+    # ========================================================================
+    #  PHASE 3: APPLY — Push transformed config to destination device
+    # ========================================================================
+
+    - name: "PHASE 3 Banner"
+      ansible.builtin.debug:
+        msg: "PHASE 3: Applying {{ destination_config | length }} config entries to destination device {{ destination_device_ip }}"
+      tags: [apply]
+
+    - name: "Apply host port onboarding config to destination device"
+      cisco.dnac.sda_host_port_onboarding_workflow_manager:
+        <<: *dnac_login
+        config_verify: true
+        state: merged
+        config:
+          - "{{ item }}"
+      loop: "{{ destination_config }}"
+      loop_control:
+        label: "{{ item.ip_address }} — {{ (item.keys() | list | difference(['ip_address', 'fabric_site_name_hierarchy'])) | first | default('config') }}"
+        pause: 10
+      register: apply_result
+      tags: [apply]
+
+    - name: "Show apply results"
+      ansible.builtin.debug:
+        msg: "Apply result for entry {{ idx + 1 }}: {{ item.msg | default(item) }}"
+      loop: "{{ apply_result.results }}"
+      loop_control:
+        index_var: idx
+        label: "Entry {{ idx + 1 }}"
+      tags: [apply]
+
+    # ========================================================================
+    #  CLEANUP: Delete port assignments from destination device
+    #  *** NOT part of the main flow — only runs with: --tags cleanup ***
+    #  *** Requires transform to run first: --tags transform,cleanup ***
+    # ========================================================================
+
+    - name: "CLEANUP Banner"
+      ansible.builtin.debug:
+        msg: >-
+          CLEANUP: Deleting {{ destination_config | length }} port assignment config(s)
+          from destination device {{ destination_device_ip }}.
+          THIS ACTION IS DESTRUCTIVE AND CANNOT BE UNDONE.
+      tags: [never, cleanup]
+
+    - name: "Delete host port onboarding config from destination device"
+      cisco.dnac.sda_host_port_onboarding_workflow_manager:
+        <<: *dnac_login
+        config_verify: true
+        state: deleted
+        config:
+          - "{{ item }}"
+      loop: "{{ destination_config }}"
+      loop_control:
+        label: "{{ item.ip_address }} — {{ (item.keys() | list | difference(['ip_address', 'fabric_site_name_hierarchy'])) | first | default('config') }}"
+        pause: 10
+      register: cleanup_result
+      tags: [never, cleanup]
+
+    - name: "Show cleanup results"
+      ansible.builtin.debug:
+        msg: "Cleanup result for entry {{ idx + 1 }}: {{ item.msg | default(item) }}"
+      loop: "{{ cleanup_result.results }}"
+      loop_control:
+        index_var: idx
+        label: "Entry {{ idx + 1 }}"
+      tags: [never, cleanup]
+
+    # ========================================================================
+    #  PHASE 4: SUMMARY
+    # ========================================================================
+
+    - name: "Device Refresh Migration Summary"
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║     SDA HOST PORT ONBOARDING — DEVICE REFRESH SUMMARY      ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ Source Device:       {{ source_device_ip }}
+          ║ Destination Device:  {{ destination_device_ip }}
+          ║ Fabric Site:         {{ fabric_site_hierarchy }}
+          ║ Configs Extracted:   {{ extraction_result.msg.configurations_count | default('N/A') }}
+          ║ Configs Migrated:    {{ destination_config | default([]) | length | default('N/A') }}
+          ║ Extracted Config:    {{ extracted_config_file }}
+          ║ Status:              {{ 'COMPLETE' if (apply_result is defined and apply_result is not failed) else ('EXTRACT DONE' if extraction_result is defined else 'IN PROGRESS') }}
+          ╚══════════════════════════════════════════════════════════════╝
+      tags: [extract, transform, apply, always]
