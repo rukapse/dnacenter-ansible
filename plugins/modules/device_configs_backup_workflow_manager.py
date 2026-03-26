@@ -1877,6 +1877,14 @@ def main():
 
     # Initialize the NetworkCompliance object with the module
     ccc_device_configs_backup = DeviceConfigsBackup(module)
+    if ccc_device_configs_backup.compare_dnac_versions(ccc_device_configs_backup.get_ccc_version(), "2.3.7.6") < 0:
+        ccc_device_configs_backup.msg = (
+            "The specified version '{0}' does not support the Device Configuratiob Backups Operation. Supported versions start "
+            "  from '2.3.7.6' onwards. Version '2.3.7.6' introduces APIs for performing configuration backups"
+            "of reachable device(s)."
+            .format(ccc_device_configs_backup.get_ccc_version())
+        )
+        ccc_device_configs_backup.set_operation_result("failed", False, ccc_device_configs_backup.msg, "ERROR").check_return_status()
 
     if (
         ccc_device_configs_backup.compare_dnac_versions(
