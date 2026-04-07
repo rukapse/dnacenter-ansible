@@ -47,7 +47,7 @@ ansible-playbook -i inventory.yml playbook_device_refresh.yml --tags transform,a
 The playbook executes three phases:
 
 ### Phase 1: Extract (`--tags extract`)
-Extracts the current SDA host port onboarding configuration from the source device using the `cisco.dnac.sda_host_port_onboarding_playbook_config_generator` module. The extracted config is saved to a YAML file (default: `extracted_source_config.yml`).
+Extracts the current SDA host port onboarding configuration from the source device using the `cisco.dnac.sda_host_port_onboarding_playbook_config_generator` module. Port assignments and port channels are filtered by `device_ips` to extract only the source device's config (wireless SSIDs are filtered by fabric site only, as device-level filtering does not apply). The extracted config is saved to a YAML file (default: `extracted_source_config.yml`).
 
 ### Phase 2: Transform (`--tags transform`)
 Loads the extracted YAML file, filters entries for the source device, and swaps the source device IP address with the destination device IP address. This retargets the configuration for the replacement device.

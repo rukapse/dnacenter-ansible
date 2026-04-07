@@ -46,11 +46,13 @@
           component_specific_filters:
             components_list: "{{ components_to_migrate }}"
             port_assignments:
-              fabric_site_name_hierarchy:
-                - "{{ fabric_site_hierarchy }}"
+              - fabric_site_name_hierarchy: "{{ fabric_site_hierarchy }}"
+                device_ips:
+                  - "{{ source_device_ip }}"
             port_channels:
-              fabric_site_name_hierarchy:
-                - "{{ fabric_site_hierarchy }}"
+              - fabric_site_name_hierarchy: "{{ fabric_site_hierarchy }}"
+                device_ips:
+                  - "{{ source_device_ip }}"
             wireless_ssids:
               fabric_site_name_hierarchy:
                 - "{{ fabric_site_hierarchy }}"
